@@ -1,0 +1,167 @@
+name: Deploy Infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      machine_count:
+        description: 'Number of machines (1=All on one, 2=Web+SQL, 3=Web+SQL+MinIO)'
+        required: false
+        default: '3'
+        type: choice
+        options:
+          - '1'
+          - '2'
+          - '3'
+      web_vm_size:
+        description: 'Web Server VM Size (default: Standard_B2s, similar to AWS t3.medium)'
+        required: false
+        default: 'Standard_B2s'
+        type: choice
+        options:
+          - 'Standard_B1s'
+          - 'Standard_B1ms'
+          - 'Standard_B2s'
+          - 'Standard_B2ms'
+          - 'Standard_D2s_v3'
+          - 'Standard_D4s_v3'
+      sql_vm_size:
+        description: 'SQL Server VM Size'
+        required: false
+        default: 'Standard_D2s_v3'
+        type: choice
+        options:
+          - 'Standard_B2s'
+          - 'Standard_B2ms'
+          - 'Standard_D2s_v3'
+          - 'Standard_D4s_v3'
+          - 'Standard_D8s_v3'
+      minio_vm_size:
+        description: 'MinIO Server VM Size (default: Standard_B2s, similar to AWS t3.medium)'
+        required: false
+        default: 'Standard_B2s'
+        type: choice
+        options:
+          - 'Standard_B1s'
+          - 'Standard_B1ms'
+          - 'Standard_B2s'
+          - 'Standard_B2ms'
+          - 'Standard_D2s_v3'
+          - 'Standard_D4s_v3'
+      ssh_public_key:
+        description: 'SSH Public Key (for future Linux support)'
+        required: false
+        type: string
+      environment:
+        description: 'Environment'
+        required: false
+        default: 'prod'
+        type: choice
+        options:
+          - 'dev'
+          - 'staging'
+          - 'prod'
+      location:
+        description: 'Azure Region'
+        required: false
+        default: 'East US'
+        type: string
+
+env:
+  AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+  AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  TF_VAR_admin_password: ${{ secrets.AZURE_ADMIN_PASSWORD }}
+  TF_VAR_sql_sa_password: ${{ secrets.AZURE_SQL_SA_PASSWORD }}
+  TF_VAR_minio_root_password: ${{ secrets.AZURE_MINIO_ROOT_PASSWORD }}
+
+jobs:
+  deploy:
+    name: Deploy Infrastructure
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'prod' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: |
+            {
+              "clientId": "${{ secrets.AZURE_CLIENT_ID }}",
+              "clientSecret": "${{ secrets.AZURE_CLIENT_SECRET }}",
+              "subscriptionId": "${{ secrets.AZURE_SUBSCRIPTION_ID }}",
+              "tenantId": "${{ secrets.AZURE_TENANT_ID }}"
+            }
+
+      - name: Create terraform.tfvars
+        working-directory: infra/terraform
+        run: |
+          cat > terraform.tfvars <<EOF
+          resource_group_name = "sendmyfiles-rg"
+          location = "${{ github.event.inputs.location || 'East US' }}"
+          environment = "${{ github.event.inputs.environment || 'prod' }}"
+          
+          web_vm_size = "${{ github.event.inputs.web_vm_size || 'Standard_B2s' }}"
+          sql_vm_size = "${{ github.event.inputs.sql_vm_size || 'Standard_D2s_v3' }}"
+          minio_vm_size = "${{ github.event.inputs.minio_vm_size || 'Standard_B2s' }}"
+          
+          ssh_public_key = "${{ github.event.inputs.ssh_public_key || '' }}"
+          
+          tags = {
+            Project     = "SendMyFiles"
+            Environment = "${{ github.event.inputs.environment || 'prod' }}"
+            ManagedBy   = "Terraform"
+            DeployedBy  = "GitHubActions"
+            WorkflowRun = "${{ github.run_id }}"
+            CommitSHA   = "${{ github.sha }}"
+            Repository  = "${{ github.repository }}"
+            Branch      = "${{ github.ref_name }}"
+            MachineCount = "${{ github.event.inputs.machine_count || '3' }}"
+          }
+          EOF
+          echo "Note: Machine count (${{ github.event.inputs.machine_count || '3' }}) is recorded in tags. Current Terraform always creates 3 servers (Web, SQL, MinIO) for the standard architecture."
+
+      - name: Terraform Init
+        working-directory: infra/terraform
+        run: terraform init
+
+      - name: Terraform Plan
+        working-directory: infra/terraform
+        run: terraform plan -out=tfplan
+        continue-on-error: false
+
+      - name: Terraform Apply
+        working-directory: infra/terraform
+        run: terraform apply -auto-approve tfplan
+
+      - name: Get Terraform Outputs
+        working-directory: infra/terraform
+        run: |
+          echo "## Infrastructure Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Web Server" >> $GITHUB_STEP_SUMMARY
+          terraform output -raw web_server_public_ip >> $GITHUB_STEP_SUMMARY || echo "N/A" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### SQL Server" >> $GITHUB_STEP_SUMMARY
+          terraform output -raw sql_server_private_ip >> $GITHUB_STEP_SUMMARY || echo "N/A" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### MinIO Server" >> $GITHUB_STEP_SUMMARY
+          terraform output -raw minio_server_private_ip >> $GITHUB_STEP_SUMMARY || echo "N/A" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Application URL" >> $GITHUB_STEP_SUMMARY
+          terraform output -raw application_url >> $GITHUB_STEP_SUMMARY || echo "N/A" >> $GITHUB_STEP_SUMMARY
+
+      - name: Save Terraform State
+        if: always()
+        working-directory: infra/terraform
+        run: |
+          echo "Terraform state saved. To view outputs, run: terraform output"
+

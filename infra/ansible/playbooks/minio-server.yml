@@ -1,0 +1,138 @@
+---
+# Configure MinIO Server
+- name: Configure MinIO Server
+  hosts: minio_servers
+  gather_facts: yes
+  become: no
+
+  tasks:
+    - name: Configure Windows Firewall for MinIO API
+      win_firewall_rule:
+        name: MinIO API
+        direction: in
+        action: allow
+        protocol: TCP
+        localport: 9000
+        state: present
+        enabled: yes
+
+    - name: Configure Windows Firewall for MinIO Console
+      win_firewall_rule:
+        name: MinIO Console
+        direction: in
+        action: allow
+        protocol: TCP
+        localport: 9001
+        state: present
+        enabled: yes
+
+    - name: Create MinIO directories
+      win_file:
+        path: "{{ item }}"
+        state: directory
+      loop:
+        - C:\MinIO
+        - C:\MinIO\Data
+        - C:\MinIO\Config
+
+    - name: Check for data disk
+      win_shell: |
+        $disk = Get-Disk | Where-Object { $_.PartitionStyle -eq "RAW" } | Select-Object -First 1
+        if ($disk) {
+          Write-Output $disk.Number
+        } else {
+          Write-Output "NONE"
+        }
+      register: data_disk_check
+
+    - name: Initialize and format data disk
+      win_shell: |
+        $diskNumber = {{ data_disk_check.stdout }}
+        if ($diskNumber -ne "NONE") {
+          Initialize-Disk -Number $diskNumber -PartitionStyle GPT
+          $partition = New-Partition -DiskNumber $diskNumber -UseMaximumSize -AssignDriveLetter
+          Format-Volume -DriveLetter $partition.DriveLetter -FileSystem NTFS -NewFileSystemLabel "MinIOData" -Confirm:$false
+          New-Item -ItemType Directory -Force -Path "$($partition.DriveLetter):\MinIO\Data" | Out-Null
+          Write-Output "$($partition.DriveLetter):\MinIO\Data"
+        } else {
+          Write-Output "C:\MinIO\Data"
+        }
+      register: minio_data_path
+
+    - name: Download MinIO
+      win_get_url:
+        url: https://dl.min.io/server/minio/release/windows-amd64/minio.exe
+        dest: C:\MinIO\minio.exe
+        timeout: 300
+
+    - name: Create MinIO environment file
+      win_template:
+        src: ../../templates/minio.env.j2
+        dest: C:\MinIO\.env
+      vars:
+        minio_root_user: "{{ minio_root_user }}"
+        minio_root_password: "{{ minio_root_password }}"
+
+    - name: Create MinIO start script
+      win_template:
+        src: ../../templates/start-minio.bat.j2
+        dest: C:\MinIO\start-minio.bat
+      vars:
+        minio_data_path: "{{ minio_data_path.stdout | default('C:\\MinIO\\Data') }}"
+
+    - name: Download NSSM (Non-Sucking Service Manager)
+      win_get_url:
+        url: https://nssm.cc/release/nssm-2.24.zip
+        dest: C:\Windows\Temp\nssm.zip
+        timeout: 300
+
+    - name: Extract NSSM
+      win_unzip:
+        src: C:\Windows\Temp\nssm.zip
+        dest: C:\Windows\Temp\nssm
+        creates: C:\Windows\Temp\nssm
+
+    - name: Find NSSM executable
+      win_find:
+        paths: C:\Windows\Temp\nssm
+        patterns: nssm.exe
+        recurse: yes
+      register: nssm_exe
+
+    - name: Install MinIO as Windows Service
+      win_shell: |
+        $nssmPath = "{{ nssm_exe.files[0].path }}"
+        & $nssmPath install MinIO "C:\MinIO\minio.exe" "server {{ minio_data_path.stdout }} --console-address `":9001`" --address `":9000`""
+        & $nssmPath set MinIO AppEnvironmentExtra "MINIO_ROOT_USER={{ minio_root_user }}" "MINIO_ROOT_PASSWORD={{ minio_root_password }}"
+        & $nssmPath set MinIO AppDirectory "C:\MinIO"
+        & $nssmPath set MinIO DisplayName "MinIO Object Storage"
+        & $nssmPath set MinIO Description "MinIO S3-compatible object storage server"
+        & $nssmPath set MinIO Start SERVICE_AUTO_START
+      when: nssm_exe.files | length > 0
+
+    - name: Start MinIO service
+      win_service:
+        name: MinIO
+        state: started
+      when: nssm_exe.files | length > 0
+      ignore_errors: yes
+
+    - name: Create MinIO startup script (fallback if service fails)
+      win_copy:
+        content: |
+          @echo off
+          cd /d C:\MinIO
+          set MINIO_ROOT_USER={{ minio_root_user }}
+          set MINIO_ROOT_PASSWORD={{ minio_root_password }}
+          minio.exe server {{ minio_data_path.stdout }} --console-address ":9001" --address ":9000"
+        dest: C:\ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp\MinIO.bat
+      when: nssm_exe.files | length == 0
+
+    - name: Display MinIO configuration
+      win_shell: |
+        Write-Host "MinIO configuration completed!"
+        Write-Host "MinIO API: http://localhost:9000"
+        Write-Host "MinIO Console: http://localhost:9001"
+        Write-Host "Root User: {{ minio_root_user }}"
+        Write-Host "Data Path: {{ minio_data_path.stdout }}"
+

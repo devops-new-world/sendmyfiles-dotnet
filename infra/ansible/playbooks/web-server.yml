@@ -1,0 +1,130 @@
+---
+# Configure Web Server (IIS, .NET Framework, Application)
+- name: Configure Web Server
+  hosts: web_servers
+  gather_facts: yes
+  become: no
+
+  tasks:
+    - name: Install IIS and required features
+      win_feature:
+        name:
+          - Web-Server
+          - Web-WebServer
+          - Web-Common-Http
+          - Web-Default-Doc
+          - Web-Dir-Browsing
+          - Web-Http-Errors
+          - Web-Static-Content
+          - Web-Http-Logging
+          - Web-Request-Monitor
+          - Web-Filtering
+          - Web-Stat-Compression
+          - Web-Dyn-Compression
+          - Web-Mgmt-Console
+          - Web-Mgmt-Service
+          - Web-Mgmt-Tools
+          - Web-Mgmt-Compat
+          - Web-Metabase
+          - Web-Lgcy-Mgmt-Console
+          - Web-Lgcy-Scripting
+          - Web-WMI
+          - Web-Scripting-Tools
+          - Web-Asp-Net45
+          - Net-Framework-45-ASPNET
+          - Web-Net-Ext45
+          - Web-ISAPI-Ext
+          - Web-ISAPI-Filter
+        state: present
+        restart: yes
+
+    - name: Download .NET Framework 4.8
+      win_get_url:
+        url: https://go.microsoft.com/fwlink/?linkid=2088631
+        dest: C:\Windows\Temp\ndp48-web.exe
+        timeout: 300
+
+    - name: Install .NET Framework 4.8
+      win_package:
+        path: C:\Windows\Temp\ndp48-web.exe
+        arguments: /quiet /norestart
+        state: present
+
+    - name: Configure Windows Firewall for HTTP
+      win_firewall_rule:
+        name: HTTP
+        direction: in
+        action: allow
+        protocol: TCP
+        localport: 80
+        state: present
+        enabled: yes
+
+    - name: Configure Windows Firewall for HTTPS
+      win_firewall_rule:
+        name: HTTPS
+        direction: in
+        action: allow
+        protocol: TCP
+        localport: 443
+        state: present
+        enabled: yes
+
+    - name: Create application directory
+      win_file:
+        path: C:\inetpub\wwwroot\SendMyFiles
+        state: directory
+
+    - name: Create App_Data directory
+      win_file:
+        path: C:\inetpub\wwwroot\SendMyFiles\App_Data\Uploads
+        state: directory
+
+    - name: Set directory permissions for IIS_IUSRS
+      win_acl:
+        path: C:\inetpub\wwwroot\SendMyFiles
+        user: IIS_IUSRS
+        rights: FullControl
+        type: allow
+        state: present
+        inherit: ContainerInherit,ObjectInherit
+
+    - name: Create Web.config template
+      win_template:
+        src: ../../templates/Web.config.j2
+        dest: C:\inetpub\wwwroot\SendMyFiles\Web.config
+      vars:
+        sql_server_ip: "{{ sql_server_ip }}"
+        minio_server_ip: "{{ minio_server_ip }}"
+        minio_root_user: "{{ minio_root_user }}"
+        minio_root_password: "{{ minio_root_password }}"
+        base_url: "{{ base_url }}"
+        smtp_server: "{{ smtp_server }}"
+        smtp_port: "{{ smtp_port }}"
+        smtp_username: "{{ smtp_username }}"
+        smtp_password: "{{ smtp_password }}"
+        smtp_from_email: "{{ smtp_from_email }}"
+
+    - name: Copy application files
+      win_copy:
+        src: "{{ item }}"
+        dest: C:\inetpub\wwwroot\SendMyFiles\
+      loop:
+        - "{{ playbook_dir }}/../../../../SendMyFiles.Web/bin"
+        - "{{ playbook_dir }}/../../../../SendMyFiles.Business/bin"
+        - "{{ playbook_dir }}/../../../../SendMyFiles.Data/bin"
+        - "{{ playbook_dir }}/../../../../SendMyFiles.Models/bin"
+      when: item is defined
+
+    - name: Restart IIS
+      win_service:
+        name: W3SVC
+        state: restarted
+
+    - name: Display completion message
+      win_shell: |
+        Write-Host "Web server configuration completed!"
+        Write-Host "Application available at: {{ base_url }}"
+        Write-Host "SQL Server: {{ sql_server_ip }}"
+        Write-Host "MinIO: {{ minio_server_ip }}:9000"
+

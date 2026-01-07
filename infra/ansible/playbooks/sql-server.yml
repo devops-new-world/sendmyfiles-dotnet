@@ -1,0 +1,77 @@
+---
+# Configure SQL Server
+- name: Configure SQL Server
+  hosts: sql_servers
+  gather_facts: yes
+  become: no
+
+  tasks:
+    - name: Wait for SQL Server service to be ready
+      win_service:
+        name: MSSQLSERVER
+        state: started
+      register: sql_service
+      until: sql_service.status is succeeded
+      retries: 30
+      delay: 10
+
+    - name: Configure Windows Firewall for SQL Server
+      win_firewall_rule:
+        name: SQL Server
+        direction: in
+        action: allow
+        protocol: TCP
+        localport: 1433
+        state: present
+        enabled: yes
+
+    - name: Check for data disk
+      win_shell: |
+        $disk = Get-Disk | Where-Object { $_.PartitionStyle -eq "RAW" } | Select-Object -First 1
+        if ($disk) {
+          Write-Output $disk.Number
+        } else {
+          Write-Output "NONE"
+        }
+      register: data_disk_check
+
+    - name: Initialize and format data disk
+      win_shell: |
+        $diskNumber = {{ data_disk_check.stdout }}
+        if ($diskNumber -ne "NONE") {
+          Initialize-Disk -Number $diskNumber -PartitionStyle GPT
+          $partition = New-Partition -DiskNumber $diskNumber -UseMaximumSize -AssignDriveLetter
+          Format-Volume -DriveLetter $partition.DriveLetter -FileSystem NTFS -NewFileSystemLabel "SQLData" -Confirm:$false
+          Write-Output "Data disk initialized: $($partition.DriveLetter):"
+        }
+      when: data_disk_check.stdout != "NONE"
+
+    - name: Create SQL configuration script
+      win_template:
+        src: ../../templates/ConfigureSQL.sql.j2
+        dest: C:\AzureData\ConfigureSQL.sql
+      vars:
+        sa_password: "{{ sql_sa_password }}"
+
+    - name: Display SQL Server configuration instructions
+      win_shell: |
+        Write-Host "SQL Server configuration script created at C:\AzureData\ConfigureSQL.sql"
+        Write-Host "To configure SQL Server:"
+        Write-Host "1. Open SQL Server Management Studio (SSMS)"
+        Write-Host "2. Connect using Windows Authentication"
+        Write-Host "3. Run the script: C:\AzureData\ConfigureSQL.sql"
+        Write-Host "4. Or use sqlcmd: sqlcmd -S localhost -i C:\AzureData\ConfigureSQL.sql"
+        Write-Host ""
+        Write-Host "Note: You may need to restart SQL Server service after running the script"
+
+    - name: Create database schema script location
+      win_file:
+        path: C:\AzureData\Database
+        state: directory
+
+    - name: Copy database schema script
+      win_copy:
+        src: "{{ playbook_dir }}/../../../../Database/Schema.sql"
+        dest: C:\AzureData\Database\Schema.sql
+      when: schema_sql_path is defined
+

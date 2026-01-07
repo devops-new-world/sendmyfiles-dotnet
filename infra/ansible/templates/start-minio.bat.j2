@@ -1,0 +1,6 @@
+@echo off
+cd /d C:\MinIO
+set MINIO_ROOT_USER={{ minio_root_user }}
+set MINIO_ROOT_PASSWORD={{ minio_root_password }}
+minio.exe server {{ minio_data_path }} --console-address ":9001" --address ":9000"
+

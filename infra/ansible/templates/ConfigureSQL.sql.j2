@@ -1,0 +1,26 @@
+-- Configure SQL Server for SendMyFiles
+-- Enable SQL Server Authentication (Mixed Mode)
+EXEC xp_instance_regwrite N'HKEY_LOCAL_MACHINE', N'Software\Microsoft\MSSQLServer\MSSQLServer', N'LoginMode', REG_DWORD, 2;
+GO
+
+-- Set SA password
+ALTER LOGIN sa WITH PASSWORD = '{{ sa_password }}';
+ALTER LOGIN sa ENABLE;
+GO
+
+-- Enable TCP/IP protocol
+EXEC xp_instance_regwrite N'HKEY_LOCAL_MACHINE', N'Software\Microsoft\MSSQLServer\MSSQLServer\SuperSocketNetLib\Tcp\IPAll', N'TcpPort', REG_SZ, N'1433';
+GO
+
+-- Create database
+IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = 'SendMyFiles')
+BEGIN
+    CREATE DATABASE SendMyFiles;
+END
+GO
+
+USE SendMyFiles;
+GO
+
+-- Note: Run Database/Schema.sql to create tables
+

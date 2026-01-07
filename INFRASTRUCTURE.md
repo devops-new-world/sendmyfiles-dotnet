@@ -74,7 +74,7 @@
 
 **Technology**: IIS 10.0+ (Internet Information Services)
 
-**Runtime**: .NET Framework 4.8
+**Runtime**: .NET Framework 4.8 (or latest 4.8.2)
 
 **Ports**: 
 - **80** (HTTP)
@@ -88,9 +88,9 @@
   - 2 GB RAM
   - 10 GB disk space
 - **Recommended**: 
-  - Windows Server 2019/2022
+  - Windows Server 2022 (latest)
   - IIS 10.0+
-  - .NET Framework 4.8
+  - .NET Framework 4.8.2 (latest)
   - 4 GB RAM
   - 50 GB disk space (for local storage)
 
@@ -105,6 +105,8 @@
 ### 2. Database Server
 
 **Technology**: Microsoft SQL Server (MSSQL) - **NOT MySQL**
+
+**Latest Version**: SQL Server 2022
 
 **Port**: **1433** (TCP)
 
@@ -523,6 +525,33 @@ For high availability, you can add:
 
 ---
 
+## Infrastructure as Code (Terraform)
+
+A complete Terraform configuration is available to provision the 3-server infrastructure on Azure:
+
+**Location**: `infra/terraform/`
+
+**What it provisions**:
+- 3 Windows Server 2022 VMs (Web, SQL, MinIO)
+- Virtual network with subnets and security groups
+- Automatic installation scripts for IIS, SQL Server, and MinIO
+- Data disks for SQL Server and MinIO
+- Public IP for web server access
+
+**Quick Start**:
+```bash
+cd infra/terraform
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars with your values
+terraform init
+terraform plan
+terraform apply
+```
+
+See **[infra/terraform/README.md](infra/terraform/README.md)** for detailed instructions.
+
+---
+
 ## Related Documentation
 
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - Detailed architecture diagrams and scenarios
@@ -530,4 +559,5 @@ For high availability, you can add:
 - **[DOCKER.md](DOCKER.md)** - Docker containerization guide
 - **[SETUP.md](SETUP.md)** - Development setup instructions
 - **[IIS-DEPLOYMENT.md](IIS-DEPLOYMENT.md)** - IIS-specific deployment guide
+- **[infra/terraform/README.md](infra/terraform/README.md)** - Terraform infrastructure provisioning
 

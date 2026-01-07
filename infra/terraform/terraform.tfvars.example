@@ -1,0 +1,44 @@
+# Copy this file to terraform.tfvars and update with your values
+# terraform.tfvars is ignored by git for security
+
+resource_group_name = "sendmyfiles-rg"
+location            = "East US"
+environment         = "prod"
+
+# Administrator credentials for Windows VMs
+admin_username = "adminuser"
+admin_password = "YourSecurePassword123!" # Minimum 12 characters
+
+# SQL Server SA password
+sql_sa_password = "YourSecureSQLPassword123!" # Minimum 12 characters
+
+# MinIO credentials
+minio_root_user     = "minioadmin"
+minio_root_password = "YourSecureMinIOPassword123!"
+
+# VM Sizes (adjust based on your needs)
+web_vm_size   = "Standard_D2s_v3"   # 2 vCPUs, 8 GB RAM
+sql_vm_size   = "Standard_D4s_v3"  # 4 vCPUs, 16 GB RAM
+minio_vm_size = "Standard_D2s_v3"   # 2 vCPUs, 8 GB RAM
+
+# Disk sizes (GB)
+web_vm_disk_size_gb   = 128
+sql_vm_disk_size_gb   = 256
+minio_vm_disk_size_gb = 256
+
+sql_data_disk_size_gb   = 512
+minio_data_disk_size_gb = 1024
+
+# Network configuration
+vnet_address_space            = ["10.0.0.0/16"]
+web_subnet_address_prefix     = "10.0.1.0/24"
+sql_subnet_address_prefix      = "10.0.2.0/24"
+minio_subnet_address_prefix   = "10.0.3.0/24"
+
+# Tags
+tags = {
+  Project     = "SendMyFiles"
+  Environment = "Production"
+  ManagedBy   = "Terraform"
+}
+

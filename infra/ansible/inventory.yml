@@ -1,0 +1,46 @@
+---
+all:
+  children:
+    web_servers:
+      hosts:
+        web_server:
+          ansible_host: "{{ web_server_ip }}"
+          ansible_user: "{{ admin_username }}"
+          ansible_password: "{{ admin_password }}"
+          ansible_connection: winrm
+          ansible_winrm_transport: basic
+          ansible_winrm_server_cert_validation: ignore
+          sql_server_ip: "{{ sql_server_ip }}"
+          minio_server_ip: "{{ minio_server_ip }}"
+          minio_root_user: "{{ minio_root_user }}"
+          minio_root_password: "{{ minio_root_password }}"
+          base_url: "{{ base_url }}"
+          smtp_server: "{{ smtp_server }}"
+          smtp_port: "{{ smtp_port }}"
+          smtp_username: "{{ smtp_username }}"
+          smtp_password: "{{ smtp_password }}"
+          smtp_from_email: "{{ smtp_from_email }}"
+
+    sql_servers:
+      hosts:
+        sql_server:
+          ansible_host: "{{ sql_server_ip }}"
+          ansible_user: "{{ admin_username }}"
+          ansible_password: "{{ admin_password }}"
+          ansible_connection: winrm
+          ansible_winrm_transport: basic
+          ansible_winrm_server_cert_validation: ignore
+          sql_sa_password: "{{ sql_sa_password }}"
+
+    minio_servers:
+      hosts:
+        minio_server:
+          ansible_host: "{{ minio_server_ip }}"
+          ansible_user: "{{ admin_username }}"
+          ansible_password: "{{ minio_root_password }}"
+          ansible_connection: winrm
+          ansible_winrm_transport: basic
+          ansible_winrm_server_cert_validation: ignore
+          minio_root_user: "{{ minio_root_user }}"
+          minio_root_password: "{{ minio_root_password }}"
+

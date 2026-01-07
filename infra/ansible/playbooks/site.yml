@@ -1,0 +1,17 @@
+---
+# Main playbook - runs all configuration
+- name: Configure SendMyFiles Infrastructure
+  hosts: all
+  gather_facts: yes
+  become: no
+
+  tasks:
+    - name: Display deployment information
+      win_shell: |
+        Write-Host "SendMyFiles Infrastructure Configuration"
+        Write-Host "Hostname: $env:COMPUTERNAME"
+        Write-Host "Date: $(Get-Date)"
+      delegate_to: "{{ item }}"
+      loop: "{{ groups['all'] }}"
+      when: inventory_hostname in groups['all']
+

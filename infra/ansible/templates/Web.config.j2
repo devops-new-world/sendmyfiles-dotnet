@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <connectionStrings>
+    <add name="DefaultConnection" 
+         connectionString="Server={{ sql_server_ip }};Database=SendMyFiles;User Id=sa;Password={{ sql_sa_password }};TrustServerCertificate=True;" />
+  </connectionStrings>
+  
+  <appSettings>
+    <!-- MinIO Configuration -->
+    <add key="UseMinio" value="true" />
+    <add key="MinioEndpoint" value="{{ minio_server_ip }}:9000" />
+    <add key="MinioAccessKey" value="{{ minio_root_user }}" />
+    <add key="MinioSecretKey" value="{{ minio_root_password }}" />
+    <add key="MinioUseSSL" value="false" />
+    <add key="StorageBucketName" value="sendmyfiles" />
+    
+    <!-- SMTP Configuration -->
+    <add key="SmtpServer" value="{{ smtp_server }}" />
+    <add key="SmtpPort" value="{{ smtp_port }}" />
+    <add key="SmtpUsername" value="{{ smtp_username }}" />
+    <add key="SmtpPassword" value="{{ smtp_password }}" />
+    <add key="SmtpEnableSSL" value="true" />
+    <add key="SmtpFromEmail" value="{{ smtp_from_email }}" />
+    
+    <!-- Application Configuration -->
+    <add key="BaseUrl" value="{{ base_url }}" />
+  </appSettings>
+  
+  <system.web>
+    <compilation debug="true" targetFramework="4.8" />
+    <httpRuntime targetFramework="4.8" maxRequestLength="1048576" executionTimeout="3600" />
+  </system.web>
+</configuration>
+

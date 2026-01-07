@@ -1,0 +1,27 @@
+---
+# Common variables for all hosts
+admin_username: "adminuser"
+admin_password: "CHANGE_ME"  # Set via --extra-vars or vault
+
+# SQL Server Configuration
+sql_sa_password: "CHANGE_ME"  # Set via --extra-vars or vault
+
+# MinIO Configuration
+minio_root_user: "minioadmin"
+minio_root_password: "CHANGE_ME"  # Set via --extra-vars or vault
+
+# Application Configuration
+base_url: "http://CHANGE_ME"  # Will be set from Terraform output
+
+# SMTP Configuration (Gmail)
+smtp_server: "smtp.gmail.com"
+smtp_port: "587"
+smtp_username: "CHANGE_ME"
+smtp_password: "CHANGE_ME"
+smtp_from_email: "CHANGE_ME"
+
+# Server IPs (will be populated from Terraform outputs)
+web_server_ip: "CHANGE_ME"
+sql_server_ip: "CHANGE_ME"
+minio_server_ip: "CHANGE_ME"
+
