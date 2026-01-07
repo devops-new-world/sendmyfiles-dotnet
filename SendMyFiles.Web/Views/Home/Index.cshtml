@@ -1,0 +1,150 @@
+@{
+    ViewBag.Title = "SendMyFiles";
+}
+
+<h1>📁 SendMyFiles</h1>
+<p class="subtitle">Share your files securely with anyone, anywhere</p>
+
+@if (ViewBag.Error != null)
+{
+    <div class="alert alert-error">
+        @ViewBag.Error
+    </div>
+}
+
+@if (ViewBag.SenderEmail != null)
+{
+    <div class="quota-info">
+        <h3>
+            Account: @ViewBag.SenderEmail
+            @if (ViewBag.UserType == "Premium")
+            {
+                <span class="premium-badge premium-disabled" title="Premium feature is currently disabled">PREMIUM</span>
+            }
+            else
+            {
+                <span style="color: #666;">(Free Plan)</span>
+            }
+        </h3>
+        @if (ViewBag.UserType == "Free")
+        {
+            <p>Quota Used: @FormatBytes((long)ViewBag.UsedQuota) / @FormatBytes((long)ViewBag.QuotaLimit)</p>
+            <div class="quota-bar">
+                <div class="quota-fill" style="width: @(Math.Min(100, ((long)ViewBag.UsedQuota * 100 / (long)ViewBag.QuotaLimit)))%"></div>
+            </div>
+            <p style="margin-top: 5px; font-size: 12px; color: #666;">Available: @FormatBytes((long)ViewBag.AvailableQuota)</p>
+        }
+        else
+        {
+            <p>Unlimited storage (Premium feature currently disabled)</p>
+        }
+    </div>
+}
+
+<form id="uploadForm" enctype="multipart/form-data">
+    <div class="form-group">
+        <label for="senderEmail">Your Email Address *</label>
+        <input type="email" id="senderEmail" name="senderEmail" required 
+               value="@(ViewBag.SenderEmail ?? "")" 
+               placeholder="your.email@example.com" />
+    </div>
+    
+    <div class="form-group">
+        <label for="recipientEmail">Recipient Email Address *</label>
+        <input type="email" id="recipientEmail" name="recipientEmail" required 
+               value="@(ViewBag.RecipientEmail ?? "")" 
+               placeholder="recipient@example.com" />
+    </div>
+    
+    <div class="form-group">
+        <label for="file">Select File to Upload *</label>
+        <input type="file" id="file" name="file" required />
+    </div>
+    
+    <button type="submit" class="btn" id="uploadBtn">Upload & Send File</button>
+</form>
+
+<div id="message" style="display: none;"></div>
+
+<script>
+    document.getElementById('uploadForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        var formData = new FormData();
+        var fileInput = document.getElementById('file');
+        var senderEmail = document.getElementById('senderEmail').value;
+        var recipientEmail = document.getElementById('recipientEmail').value;
+        
+        if (!fileInput.files[0]) {
+            showMessage('Please select a file to upload.', 'error');
+            return;
+        }
+        
+        formData.append('file', fileInput.files[0]);
+        formData.append('senderEmail', senderEmail);
+        formData.append('recipientEmail', recipientEmail);
+        
+        var uploadBtn = document.getElementById('uploadBtn');
+        uploadBtn.disabled = true;
+        uploadBtn.textContent = 'Uploading...';
+        
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '/File/Upload', true);
+        
+        xhr.onload = function() {
+            uploadBtn.disabled = false;
+            uploadBtn.textContent = 'Upload & Send File';
+            
+            if (xhr.status === 200) {
+                var response = JSON.parse(xhr.responseText);
+                if (response.success) {
+                    showMessage(response.message, 'success');
+                    document.getElementById('uploadForm').reset();
+                    // Reload page to update quota
+                    setTimeout(function() {
+                        location.reload();
+                    }, 2000);
+                } else {
+                    showMessage(response.message, 'error');
+                }
+            } else {
+                showMessage('An error occurred while uploading the file.', 'error');
+            }
+        };
+        
+        xhr.onerror = function() {
+            uploadBtn.disabled = false;
+            uploadBtn.textContent = 'Upload & Send File';
+            showMessage('Network error. Please try again.', 'error');
+        };
+        
+        xhr.send(formData);
+    });
+    
+    function showMessage(message, type) {
+        var messageDiv = document.getElementById('message');
+        messageDiv.className = 'alert alert-' + (type === 'success' ? 'success' : 'error');
+        messageDiv.textContent = message;
+        messageDiv.style.display = 'block';
+        
+        setTimeout(function() {
+            messageDiv.style.display = 'none';
+        }, 5000);
+    }
+</script>
+
+@functions {
+    private string FormatBytes(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB" };
+        double len = bytes;
+        int order = 0;
+        while (len >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            len = len / 1024;
+        }
+        return string.Format("{0:0.##} {1}", len, sizes[order]);
+    }
+}
+

@@ -1,0 +1,32 @@
+# Ignore build outputs
+**/bin/
+**/obj/
+**/Debug/
+**/Release/
+
+# Ignore Visual Studio files
+.vs/
+*.suo
+*.user
+*.sln.docstates
+
+# Ignore NuGet packages
+**/packages/
+*.nupkg
+
+# Ignore App_Data uploads
+**/App_Data/Uploads/*
+!**/App_Data/Uploads/.gitkeep
+
+# Ignore git
+.git/
+.gitignore
+
+# Keep source files and configs
+!**/*.cs
+!**/*.csproj
+!**/*.config
+!**/*.sql
+!**/*.cshtml
+!**/*.asax
+

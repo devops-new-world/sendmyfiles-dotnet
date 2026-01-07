@@ -1,0 +1,27 @@
+# Alternative: If you want to migrate to .NET Core/.NET 5+ for Linux containers
+# This is a reference - the current app is .NET Framework and requires Windows containers
+# To use this, you would need to migrate the application to .NET Core/ASP.NET Core
+
+# FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
+# WORKDIR /app
+# EXPOSE 80
+# 
+# FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+# WORKDIR /src
+# COPY ["SendMyFiles.Web/SendMyFiles.Web.csproj", "SendMyFiles.Web/"]
+# RUN dotnet restore "SendMyFiles.Web/SendMyFiles.Web.csproj"
+# COPY . .
+# WORKDIR "/src/SendMyFiles.Web"
+# RUN dotnet build "SendMyFiles.Web.csproj" -c Release -o /app/build
+# 
+# FROM build AS publish
+# RUN dotnet publish "SendMyFiles.Web.csproj" -c Release -o /app/publish
+# 
+# FROM base AS final
+# WORKDIR /app
+# COPY --from=publish /app/publish .
+# ENTRYPOINT ["dotnet", "SendMyFiles.Web.dll"]
+
+# Note: Current application uses .NET Framework 4.8
+# Use Dockerfile (Windows) instead
+

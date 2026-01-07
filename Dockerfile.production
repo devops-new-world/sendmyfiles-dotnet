@@ -1,0 +1,51 @@
+# Production Dockerfile for SendMyFiles
+# This uses a multi-stage build to publish the application first
+# Requires: Build Tools for Visual Studio or MSBuild
+
+# Stage 1: Build
+FROM mcr.microsoft.com/dotnet/framework/sdk:4.8-windowsservercore-ltsc2022 AS build
+
+WORKDIR /src
+
+# Copy solution and project files
+COPY SendMyFiles.sln .
+COPY SendMyFiles.Models/SendMyFiles.Models.csproj SendMyFiles.Models/
+COPY SendMyFiles.Data/SendMyFiles.Data.csproj SendMyFiles.Data/
+COPY SendMyFiles.Business/SendMyFiles.Business.csproj SendMyFiles.Business/
+COPY SendMyFiles.Web/SendMyFiles.Web.csproj SendMyFiles.Web/
+
+# Restore NuGet packages
+RUN nuget restore SendMyFiles.sln
+
+# Copy source code
+COPY SendMyFiles.Models/ SendMyFiles.Models/
+COPY SendMyFiles.Data/ SendMyFiles.Data/
+COPY SendMyFiles.Business/ SendMyFiles.Business/
+COPY SendMyFiles.Web/ SendMyFiles.Web/
+
+# Build solution
+RUN msbuild SendMyFiles.sln /p:Configuration=Release /p:Platform="Any CPU" /t:Build
+
+# Publish web application
+WORKDIR /src/SendMyFiles.Web
+RUN msbuild SendMyFiles.Web.csproj /p:Configuration=Release /p:Platform="Any CPU" /p:DeployOnBuild=true /p:PublishProfile=FolderProfile /p:PublishUrl=/app/publish
+
+# Stage 2: Runtime
+FROM mcr.microsoft.com/dotnet/framework/aspnet:4.8-windowsservercore-ltsc2022 AS runtime
+
+WORKDIR /inetpub/wwwroot
+
+# Copy published files from build stage
+COPY --from=build /app/publish/ .
+
+# Create App_Data directory
+RUN powershell -Command \
+    New-Item -ItemType Directory -Force -Path C:\inetpub\wwwroot\App_Data\Uploads | Out-Null
+
+# Set permissions
+RUN icacls "C:\inetpub\wwwroot\App_Data" /grant "IIS_IUSRS:(OI)(CI)F" /T
+
+EXPOSE 80
+
+# IIS is already configured in the base image
+
