@@ -172,6 +172,18 @@ variable "aws_instance_profile" {
   default     = ""
 }
 
+variable "aws_windows_ami_id" {
+  description = "AWS Windows AMI ID (e.g., ami-06777e7ef7441deff for Windows Server 2025 Base). Leave empty for auto-detection."
+  type        = string
+  default     = ""
+}
+
+variable "aws_sql_ami_id" {
+  description = "AWS SQL Server AMI ID. Leave empty for auto-detection."
+  type        = string
+  default     = ""
+}
+
 # GCP-specific variables
 variable "gcp_project_id" {
   description = "GCP Project ID"

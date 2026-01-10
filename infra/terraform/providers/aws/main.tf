@@ -1,6 +1,22 @@
 # AWS Provider Module for SendMyFiles
 
-# Get Windows Server 2022 AMI
+# Get Windows Server 2025 Base AMI (or fallback to 2022)
+data "aws_ami" "windows_2025" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["Windows_Server-2025-English-Full-Base-*"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
+# Fallback to Windows Server 2022 if 2025 not available
 data "aws_ami" "windows_2022" {
   most_recent = true
   owners      = ["amazon"]
@@ -16,20 +32,34 @@ data "aws_ami" "windows_2022" {
   }
 }
 
-# Get SQL Server 2022 AMI
+# Use Windows Server 2025 if available, otherwise 2022
+# Default to Windows Server 2025 Base AMI (ami-06777e7ef7441deff) if available
+locals {
+  # Try to use the specific AMI ID first, then try data source lookups
+  # Default to Windows Server 2025 Base AMI (ami-06777e7ef7441deff) that user has access to
+  # Try custom AMI first, then Windows 2025 lookup, then hardcoded fallback, then Windows 2022
+  windows_ami_id = var.windows_ami_id != "" ? var.windows_ami_id : try(data.aws_ami.windows_2025.id, "ami-06777e7ef7441deff", data.aws_ami.windows_2022.id)
+}
+
+# Get SQL Server 2022 AMI (or use Windows 2025 with SQL installed separately)
 data "aws_ami" "sql_2022" {
   most_recent = true
   owners      = ["amazon"]
 
   filter {
     name   = "name"
-    values = ["Windows_Server-2022-English-Full-SQL_2022*"]
+    values = ["Windows_Server-2022-English-Full-SQL_2022*", "Windows_Server-2025-English-Full-SQL_2022*"]
   }
 
   filter {
     name   = "virtualization-type"
     values = ["hvm"]
   }
+}
+
+# Fallback: use Windows 2025 Base if SQL AMI not available (SQL will be installed via Ansible)
+locals {
+  sql_ami_id = var.sql_ami_id != "" ? var.sql_ami_id : try(data.aws_ami.sql_2022.id, local.windows_ami_id)
 }
 
 # VPC
@@ -208,7 +238,7 @@ resource "aws_security_group" "minio" {
 
 # Web Server EC2 Instance
 resource "aws_instance" "web" {
-  ami                    = data.aws_ami.windows_2022.id
+  ami                    = local.windows_ami_id
   instance_type          = var.web_instance_type
   subnet_id              = aws_subnet.web.id
   vpc_security_group_ids = [aws_security_group.web.id]
@@ -249,7 +279,7 @@ resource "aws_eip" "web" {
 
 # SQL Server EC2 Instance
 resource "aws_instance" "sql" {
-  ami                    = data.aws_ami.sql_2022.id
+  ami                    = local.sql_ami_id
   instance_type          = var.sql_instance_type
   subnet_id              = aws_subnet.sql.id
   vpc_security_group_ids = [aws_security_group.sql.id]
@@ -287,7 +317,7 @@ resource "aws_instance" "sql" {
 
 # MinIO Server EC2 Instance
 resource "aws_instance" "minio" {
-  ami                    = data.aws_ami.windows_2022.id
+  ami                    = local.windows_ami_id
   instance_type          = var.minio_instance_type
   subnet_id              = aws_subnet.minio.id
   vpc_security_group_ids = [aws_security_group.minio.id]

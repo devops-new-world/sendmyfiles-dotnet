@@ -87,6 +87,8 @@ module "aws" {
   key_pair_name        = var.aws_key_pair_name
   instance_profile     = var.aws_instance_profile
   ssh_public_key       = var.ssh_public_key
+  windows_ami_id       = var.aws_windows_ami_id
+  sql_ami_id           = var.aws_sql_ami_id
   tags                 = var.tags
   random_suffix        = random_id.suffix.hex
 }

@@ -103,3 +103,15 @@ variable "tags" {
 variable "random_suffix" {
   type = string
 }
+
+variable "windows_ami_id" {
+  type        = string
+  default     = ""
+  description = "Custom Windows AMI ID (e.g., ami-06777e7ef7441deff for Windows Server 2025 Base). Leave empty to use auto-detection."
+}
+
+variable "sql_ami_id" {
+  type        = string
+  default     = ""
+  description = "Custom SQL Server AMI ID. Leave empty to use auto-detection or Windows AMI."
+}
