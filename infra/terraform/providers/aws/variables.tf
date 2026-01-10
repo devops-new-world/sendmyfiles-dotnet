@@ -65,21 +65,6 @@ variable "minio_data_disk_size_gb" {
   type = number
 }
 
-variable "vpc_cidr" {
-  type = string
-}
-
-variable "web_subnet_cidr" {
-  type = string
-}
-
-variable "sql_subnet_cidr" {
-  type = string
-}
-
-variable "minio_subnet_cidr" {
-  type = string
-}
 
 variable "key_pair_name" {
   type    = string
