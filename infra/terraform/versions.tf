@@ -24,6 +24,8 @@ terraform {
 # Configure providers conditionally
 # Note: Terraform initializes all providers, but they will only be used based on cloud_provider variable
 # Azure Provider - only authenticates when using Azure
+# Note: When not using Azure, this provider will try to authenticate but fail
+# This is expected and OK since the azure module has count=0 when not using Azure
 provider "azurerm" {
   features {
     resource_group {
@@ -34,7 +36,9 @@ provider "azurerm" {
     }
   }
   # Credentials set via ARM_* environment variables or Azure CLI
-  # When not using Azure, authentication may fail but module won't be used
+  # When not using Azure and credentials are not set, authentication will fail
+  # but this is acceptable since the module won't be used (count=0)
+  skip_provider_registration = true
 }
 
 # AWS Provider - skips validation when not using AWS

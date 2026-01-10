@@ -119,21 +119,15 @@ jobs:
         with:
           terraform_version: 1.6.0
 
-      - name: Set dummy credentials for unused providers
+      - name: Set dummy credentials for unused providers (GCP only)
         run: |
           PROVIDER="${{ github.event.inputs.cloud_provider || 'azure' }}"
           
-          # Set dummy Azure credentials if not using Azure (to avoid auth errors during plan)
-          if [ "$PROVIDER" != "azure" ]; then
-            echo "ARM_SUBSCRIPTION_ID=dummy" >> $GITHUB_ENV
-            echo "ARM_CLIENT_ID=dummy" >> $GITHUB_ENV
-            echo "ARM_CLIENT_SECRET=dummy" >> $GITHUB_ENV
-            echo "ARM_TENANT_ID=dummy" >> $GITHUB_ENV
-          fi
-          
+          # Don't set dummy Azure credentials - we use -target to skip Azure provider during plan
           # Set dummy GCP credentials if not using GCP (to avoid auth errors during plan)
           if [ "$PROVIDER" != "gcp" ]; then
-            echo '{"type":"service_account","project_id":"dummy"}' > /tmp/gcp-key.json
+            mkdir -p /tmp
+            echo '{"type":"service_account","project_id":"dummy-project","private_key_id":"dummy","private_key":"-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC\n-----END PRIVATE KEY-----\n","client_email":"dummy@dummy-project.iam.gserviceaccount.com","client_id":"123456789","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token"}' > /tmp/gcp-key.json
             echo "GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-key.json" >> $GITHUB_ENV
           fi
 
@@ -274,7 +268,16 @@ jobs:
 
       - name: Terraform Plan
         working-directory: infra/terraform
-        run: terraform plan -out=tfplan
+        run: |
+          PROVIDER="${{ github.event.inputs.cloud_provider || 'azure' }}"
+          # Use -target to only plan the selected provider module to avoid auth errors with unused providers
+          if [ "$PROVIDER" == "aws" ]; then
+            terraform plan -target=module.aws[0] -target=random_id.suffix -out=tfplan
+          elif [ "$PROVIDER" == "gcp" ]; then
+            terraform plan -target=module.gcp[0] -target=random_id.suffix -out=tfplan
+          else
+            terraform plan -target=module.azure[0] -target=random_id.suffix -out=tfplan
+          fi
         continue-on-error: false
 
       - name: Terraform Apply
