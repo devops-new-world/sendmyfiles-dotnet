@@ -50,9 +50,9 @@ on:
           - 'staging'
           - 'prod'
       location:
-        description: 'Cloud Region (e.g., East US, us-east-1, us-central1)'
+        description: 'Cloud Region (Azure: East US, AWS: us-east-1, GCP: us-central1)'
         required: false
-        default: 'East US'
+        default: ''
         type: string
       gcp_project_id:
         description: 'GCP Project ID (required for GCP)'
@@ -131,13 +131,48 @@ jobs:
               "tenantId": "${{ github.event.inputs.azure_tenant_id }}"
             }
 
+      - name: Set AWS region and convert format
+        if: github.event.inputs.cloud_provider == 'aws'
+        id: aws_region
+        run: |
+          REGION="${{ github.event.inputs.location }}"
+          echo "Input region: '$REGION'"
+          
+          # Default to us-east-1 if empty
+          if [ -z "$REGION" ] || [ "$REGION" == "" ] || [ "$REGION" == "null" ]; then
+            REGION="us-east-1"
+            echo "Using default AWS region: $REGION"
+          else
+            # Convert Azure region names to AWS format if needed
+            case "$REGION" in
+              "East US"|"eastus") REGION="us-east-1" ;;
+              "West US"|"westus") REGION="us-west-1" ;;
+              "Central US"|"centralus") REGION="us-central-1" ;;
+              "East US 2"|"eastus2") REGION="us-east-2" ;;
+              "West US 2"|"westus2") REGION="us-west-2" ;;
+              "North Central US"|"northcentralus") REGION="us-east-1" ;;
+              "South Central US"|"southcentralus") REGION="us-west-2" ;;
+              "West Central US"|"westcentralus") REGION="us-west-2" ;;
+            esac
+            echo "Converted region to AWS format: $REGION"
+          fi
+          
+          # Validate it's a valid AWS region format (us-*-* or eu-*-* etc)
+          if [[ ! "$REGION" =~ ^[a-z]+-[a-z]+-[0-9]+$ ]]; then
+            echo "::error::Invalid AWS region format: $REGION. Using default us-east-1"
+            REGION="us-east-1"
+          fi
+          
+          echo "region=$REGION" >> $GITHUB_OUTPUT
+          echo "::notice::Final AWS region: $REGION"
+
       - name: Configure AWS credentials
         if: github.event.inputs.cloud_provider == 'aws'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ github.event.inputs.aws_access_key_id }}
           aws-secret-access-key: ${{ github.event.inputs.aws_secret_access_key }}
-          aws-region: ${{ github.event.inputs.location || 'us-east-1' }}
+          aws-region: ${{ steps.aws_region.outputs.region || 'us-east-1' }}
 
       - name: Authenticate to Google Cloud
         if: github.event.inputs.cloud_provider == 'gcp'
@@ -145,13 +180,42 @@ jobs:
         with:
           credentials_json: ${{ github.event.inputs.gcp_service_account_key }}
 
+      - name: Set provider-specific location
+        id: set_location
+        run: |
+          PROVIDER="${{ github.event.inputs.cloud_provider || 'azure' }}"
+          LOCATION="${{ github.event.inputs.location }}"
+          
+          if [ -z "$LOCATION" ]; then
+            case "$PROVIDER" in
+              "azure") LOCATION="East US" ;;
+              "aws") LOCATION="us-east-1" ;;
+              "gcp") LOCATION="us-central1" ;;
+              *) LOCATION="East US" ;;
+            esac
+          fi
+          
+          # Convert Azure region names to AWS format if AWS is selected
+          if [ "$PROVIDER" == "aws" ]; then
+            case "$LOCATION" in
+              "East US"|"eastus") LOCATION="us-east-1" ;;
+              "West US"|"westus") LOCATION="us-west-1" ;;
+              "Central US"|"centralus") LOCATION="us-central-1" ;;
+              "East US 2"|"eastus2") LOCATION="us-east-2" ;;
+              "West US 2"|"westus2") LOCATION="us-west-2" ;;
+            esac
+          fi
+          
+          echo "location=$LOCATION" >> $GITHUB_OUTPUT
+          echo "Using location: $LOCATION for provider: $PROVIDER"
+
       - name: Create terraform.tfvars
         working-directory: infra/terraform
         run: |
           cat > terraform.tfvars <<EOF
           cloud_provider = "${{ github.event.inputs.cloud_provider || 'azure' }}"
           resource_group_name = "sendmyfiles-rg"
-          location = "${{ github.event.inputs.location || 'East US' }}"
+          location = "${{ steps.set_location.outputs.location }}"
           environment = "${{ github.event.inputs.environment || 'prod' }}"
           
           web_vm_size = "${{ github.event.inputs.web_vm_size || '' }}"
