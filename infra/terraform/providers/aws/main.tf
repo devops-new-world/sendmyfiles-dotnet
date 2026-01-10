@@ -41,25 +41,10 @@ locals {
   windows_ami_id = var.windows_ami_id != "" ? var.windows_ami_id : try(data.aws_ami.windows_2025.id, "ami-06777e7ef7441deff", data.aws_ami.windows_2022.id)
 }
 
-# Get SQL Server 2022 AMI (or use Windows 2025 with SQL installed separately)
-data "aws_ami" "sql_2022" {
-  most_recent = true
-  owners      = ["amazon"]
-
-  filter {
-    name   = "name"
-    values = ["Windows_Server-2022-English-Full-SQL_2022*", "Windows_Server-2025-English-Full-SQL_2022*"]
-  }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
-}
-
-# Fallback: use Windows 2025 Base if SQL AMI not available (SQL will be installed via Ansible)
+# Use Windows Server 2025 Base AMI for all instances (SQL will be installed via Ansible)
 locals {
-  sql_ami_id = var.sql_ami_id != "" ? var.sql_ami_id : try(data.aws_ami.sql_2022.id, local.windows_ami_id)
+  # All instances use the same Windows Server 2025 Base AMI
+  sql_ami_id = local.windows_ami_id
 }
 
 # VPC
@@ -263,6 +248,7 @@ resource "aws_instance" "web" {
 
   tags = merge(var.tags, {
     Name = "sendmyfiles-web-${var.random_suffix}"
+    Role = "web-server"
   })
 
   get_password_data = false
@@ -310,6 +296,7 @@ resource "aws_instance" "sql" {
 
   tags = merge(var.tags, {
     Name = "sendmyfiles-sql-${var.random_suffix}"
+    Role = "sql-server"
   })
 
   get_password_data = false
@@ -348,6 +335,7 @@ resource "aws_instance" "minio" {
 
   tags = merge(var.tags, {
     Name = "sendmyfiles-minio-${var.random_suffix}"
+    Role = "minio-server"
   })
 
   get_password_data = false

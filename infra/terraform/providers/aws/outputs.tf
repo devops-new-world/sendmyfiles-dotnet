@@ -29,8 +29,8 @@ output "connection_info" {
       port       = 1433
     }
     minio_server = {
-      private_ip = aws_instance.minio.private_ip
-      api_port    = 9000
+      private_ip   = aws_instance.minio.private_ip
+      api_port     = 9000
       console_port = 9001
     }
   }
