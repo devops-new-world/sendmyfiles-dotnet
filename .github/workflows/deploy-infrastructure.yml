@@ -66,23 +66,43 @@ on:
         description: 'AWS Key Pair Name (optional for AWS)'
         required: false
         type: string
+      # Azure credentials (provide as inputs)
+      azure_subscription_id:
+        description: 'Azure Subscription ID (required for Azure)'
+        required: false
+        type: string
+      azure_client_id:
+        description: 'Azure Client ID (required for Azure)'
+        required: false
+        type: string
+      azure_client_secret:
+        description: 'Azure Client Secret (required for Azure)'
+        required: false
+        type: string
+      azure_tenant_id:
+        description: 'Azure Tenant ID (required for Azure)'
+        required: false
+        type: string
+      # AWS credentials (provide as inputs)
+      aws_access_key_id:
+        description: 'AWS Access Key ID (required for AWS)'
+        required: false
+        type: string
+      aws_secret_access_key:
+        description: 'AWS Secret Access Key (required for AWS)'
+        required: false
+        type: string
+      # GCP credentials (provide as inputs)
+      gcp_service_account_key:
+        description: 'GCP Service Account Key JSON (required for GCP)'
+        required: false
+        type: string
 
 env:
-  # Azure credentials (if using Azure)
-  AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-  AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-  AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-  # AWS credentials (if using AWS)
-  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  AWS_DEFAULT_REGION: ${{ github.event.inputs.location || 'us-east-1' }}
-  # GCP credentials (if using GCP)
-  GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GCP_SA_KEY }}
-  # Common secrets
-  TF_VAR_admin_password: ${{ secrets.ADMIN_PASSWORD }}
-  TF_VAR_sql_sa_password: ${{ secrets.SQL_SA_PASSWORD }}
-  TF_VAR_minio_root_password: ${{ secrets.MINIO_ROOT_PASSWORD }}
+  # Common secrets with defaults
+  TF_VAR_admin_password: ${{ secrets.ADMIN_PASSWORD || 'ChangeMe123!' }}
+  TF_VAR_sql_sa_password: ${{ secrets.SQL_SA_PASSWORD || 'ChangeMe123!' }}
+  TF_VAR_minio_root_password: ${{ secrets.MINIO_ROOT_PASSWORD || 'ChangeMe123!' }}
 
 jobs:
   deploy:
@@ -105,25 +125,25 @@ jobs:
         with:
           creds: |
             {
-              "clientId": "${{ secrets.AZURE_CLIENT_ID }}",
-              "clientSecret": "${{ secrets.AZURE_CLIENT_SECRET }}",
-              "subscriptionId": "${{ secrets.AZURE_SUBSCRIPTION_ID }}",
-              "tenantId": "${{ secrets.AZURE_TENANT_ID }}"
+              "clientId": "${{ github.event.inputs.azure_client_id }}",
+              "clientSecret": "${{ github.event.inputs.azure_client_secret }}",
+              "subscriptionId": "${{ github.event.inputs.azure_subscription_id }}",
+              "tenantId": "${{ github.event.inputs.azure_tenant_id }}"
             }
 
       - name: Configure AWS credentials
         if: github.event.inputs.cloud_provider == 'aws'
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-access-key-id: ${{ github.event.inputs.aws_access_key_id }}
+          aws-secret-access-key: ${{ github.event.inputs.aws_secret_access_key }}
           aws-region: ${{ github.event.inputs.location || 'us-east-1' }}
 
       - name: Authenticate to Google Cloud
         if: github.event.inputs.cloud_provider == 'gcp'
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          credentials_json: ${{ github.event.inputs.gcp_service_account_key }}
 
       - name: Create terraform.tfvars
         working-directory: infra/terraform
