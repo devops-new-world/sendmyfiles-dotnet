@@ -1,6 +1,6 @@
-# SendMyFiles - Terraform Infrastructure
+# SendMyFiles - Multi-Cloud Terraform Infrastructure
 
-This Terraform configuration provisions a 3-server infrastructure for SendMyFiles on Azure:
+This Terraform configuration provisions a 3-server infrastructure for SendMyFiles on **Azure, AWS, or GCP**:
 
 > **💡 Tip**: You can also deploy using GitHub Actions! See [.github/workflows/README.md](../../.github/workflows/README.md) for automated deployment with manual triggers and customizable options.
 
@@ -8,17 +8,40 @@ This Terraform configuration provisions a 3-server infrastructure for SendMyFile
 2. **SQL Server** - Microsoft SQL Server 2022
 3. **MinIO Server** - S3-compatible object storage
 
+## Supported Cloud Providers
+
+- ✅ **Azure** (default)
+- ✅ **AWS**
+- ✅ **GCP**
+
 ## Prerequisites
 
+### For Azure:
 1. **Azure Account** with active subscription
 2. **Azure CLI** installed and configured
    ```bash
    az login
    az account set --subscription "Your Subscription ID"
    ```
+
+### For AWS:
+1. **AWS Account** with appropriate permissions
+2. **AWS CLI** installed and configured
+   ```bash
+   aws configure
+   ```
+
+### For GCP:
+1. **GCP Project** with billing enabled
+2. **gcloud CLI** installed and configured
+   ```bash
+   gcloud auth login
+   gcloud config set project YOUR_PROJECT_ID
+   ```
+
+### Common:
 3. **Terraform** >= 1.0 installed
    - Download from: https://www.terraform.io/downloads
-4. **PowerShell** (for Windows) or **Bash** (for Linux/Mac)
 
 ## Quick Start
 
@@ -31,19 +54,44 @@ cp terraform.tfvars.example terraform.tfvars
 ```
 
 Edit `terraform.tfvars` and set:
+- `cloud_provider` - Choose: `azure`, `aws`, or `gcp`
+- `location` - Cloud region (provider-specific)
 - `admin_password` - Administrator password for Windows VMs (min 12 chars)
 - `sql_sa_password` - SQL Server SA password (min 12 chars)
 - `minio_root_password` - MinIO root password
-- `location` - Azure region (e.g., "East US", "West Europe")
+- Provider-specific settings (see below)
 
-### 2. Initialize Terraform
+### 2. Provider-Specific Configuration
+
+#### Azure:
+```hcl
+cloud_provider = "azure"
+location       = "East US"
+```
+
+#### AWS:
+```hcl
+cloud_provider = "aws"
+location       = "us-east-1"
+aws_key_pair_name = "your-key-pair"  # Optional
+```
+
+#### GCP:
+```hcl
+cloud_provider = "gcp"
+location       = "us-central1"
+gcp_project_id = "your-project-id"
+gcp_zone       = "us-central1-a"
+```
+
+### 3. Initialize Terraform
 
 ```bash
 cd infra/terraform
 terraform init
 ```
 
-### 3. Review the Plan
+### 4. Review the Plan
 
 ```bash
 terraform plan
@@ -51,7 +99,7 @@ terraform plan
 
 This will show you what resources will be created. Review carefully.
 
-### 4. Apply the Configuration
+### 5. Apply the Configuration
 
 ```bash
 terraform apply
@@ -59,7 +107,7 @@ terraform apply
 
 Type `yes` when prompted to confirm.
 
-### 5. Get Outputs
+### 6. Get Outputs
 
 After deployment, get connection information:
 
@@ -67,45 +115,31 @@ After deployment, get connection information:
 terraform output
 ```
 
+## Default VM Sizes by Provider
+
+| Provider | Web Server | SQL Server | MinIO Server |
+|----------|------------|------------|-------------|
+| **Azure** | Standard_B2s | Standard_D2s_v3 | Standard_B2s |
+| **AWS** | t3.medium | t3.large | t3.medium |
+| **GCP** | e2-medium | e2-standard-4 | e2-medium |
+
+You can override these by setting `web_vm_size`, `sql_vm_size`, and `minio_vm_size` in `terraform.tfvars`.
+
 ## Infrastructure Components
 
 ### Network Architecture
 
-```
-┌─────────────────────────────────────────┐
-│         Virtual Network (10.0.0.0/16)   │
-│                                         │
-│  ┌──────────────┐  ┌──────────────┐   │
-│  │ Web Subnet   │  │ SQL Subnet   │   │
-│  │ 10.0.1.0/24  │  │ 10.0.2.0/24  │   │
-│  │              │  │              │   │
-│  │ Web Server   │  │ SQL Server   │   │
-│  │ (Public IP)  │  │ (Private)     │   │
-│  └──────────────┘  └──────────────┘   │
-│                                         │
-│  ┌──────────────┐                      │
-│  │ MinIO Subnet │                      │
-│  │ 10.0.3.0/24  │                      │
-│  │              │                      │
-│  │ MinIO Server │                      │
-│  │ (Private)    │                      │
-│  └──────────────┘                      │
-└─────────────────────────────────────────┘
-```
+All providers create:
+- Virtual Network/VPC with 3 subnets (Web, SQL, MinIO)
+- Security Groups/Firewall Rules
+- Public IP for web server only
+- Private IPs for SQL and MinIO servers
 
-### Security Groups
+### Security
 
-- **Web Server NSG**: Allows HTTP (80), HTTPS (443), RDP (3389)
-- **SQL Server NSG**: Allows SQL (1433) from web subnet only, RDP (3389)
-- **MinIO Server NSG**: Allows MinIO API (9000) and Console (9001) from web subnet only, RDP (3389)
-
-### Virtual Machines
-
-| Server | VM Size | vCPUs | RAM | OS Disk | Data Disk |
-|--------|---------|-------|-----|---------|-----------|
-| Web | Standard_D2s_v3 | 2 | 8 GB | 128 GB | - |
-| SQL | Standard_D4s_v3 | 4 | 16 GB | 256 GB | 512 GB |
-| MinIO | Standard_D2s_v3 | 2 | 8 GB | 256 GB | 1024 GB |
+- **Web Server**: HTTP (80), HTTPS (443), RDP (3389), WinRM (5985)
+- **SQL Server**: SQL (1433) from web subnet only, RDP (3389)
+- **MinIO**: API (9000) and Console (9001) from web subnet only, RDP (3389)
 
 ## Post-Deployment Steps
 
@@ -129,79 +163,52 @@ See **[infra/ansible/README.md](../ansible/README.md)** for detailed Ansible ins
 
 ### Option 2: Manual Configuration
 
-1. **Connect to Web Server**
-   ```bash
-   terraform output web_server_public_ip
-   mstsc /v:<public-ip>
-   ```
-
+1. **Connect to Web Server** using RDP
 2. **Install IIS and .NET Framework 4.8**
-   - Install IIS via Server Manager
-   - Download and install .NET Framework 4.8
-
-3. **Deploy Application**
-   - Copy application files to `C:\inetpub\wwwroot\SendMyFiles`
-   - Configure `Web.config` with connection strings
-
-4. **Configure SQL Server**
-   - RDP to SQL Server VM
-   - Enable Mixed Mode Authentication
-   - Run `Database/Schema.sql`
-
-5. **Configure MinIO**
-   - Install MinIO on MinIO server
-   - Create bucket and configure access
-
-## Outputs
-
-After deployment, Terraform provides:
-
-- `web_server_public_ip` - Public IP to access the application
-- `web_server_private_ip` - Private IP of web server
-- `sql_server_private_ip` - Private IP of SQL server
-- `minio_server_private_ip` - Private IP of MinIO server
-- `application_url` - URL to access the application
-- `connection_info` - Detailed connection information
+3. **Deploy Application** files
+4. **Configure SQL Server** (enable Mixed Mode, create database)
+5. **Configure MinIO** (install and create bucket)
 
 ## Cost Estimation
 
-Approximate monthly costs (varies by region):
+Approximate monthly costs (varies by region and provider):
 
-- **Web Server** (Standard_D2s_v3): ~$70/month
-- **SQL Server** (Standard_D4s_v3): ~$140/month
-- **MinIO Server** (Standard_D2s_v3): ~$70/month
-- **Storage**: ~$50/month (premium disks)
-- **Network**: ~$10/month
-- **Total**: ~$340/month
+| Provider | Web Server | SQL Server | MinIO Server | Total |
+|----------|------------|------------|--------------|-------|
+| **Azure** | ~$70 | ~$140 | ~$70 | ~$280 |
+| **AWS** | ~$60 | ~$120 | ~$60 | ~$240 |
+| **GCP** | ~$50 | ~$100 | ~$50 | ~$200 |
 
-**Note**: SQL Server Developer edition is free but requires license for production use.
+*Note: SQL Server Developer edition is free but requires license for production use.*
 
 ## Troubleshooting
 
-### Web Server Not Accessible
+### Provider Authentication Issues
 
-1. Check NSG rules allow HTTP/HTTPS
-2. Verify IIS is running: `Get-Service W3SVC`
-3. Check firewall: `Get-NetFirewallRule | Where-Object DisplayName -like "*HTTP*"`
+**Azure:**
+```bash
+az login
+az account list
+```
 
-### SQL Server Connection Issues
+**AWS:**
+```bash
+aws configure
+aws sts get-caller-identity
+```
 
-1. Verify SQL Server service is running
-2. Check SQL Server Authentication is enabled (Mixed Mode)
-3. Verify NSG allows port 1433 from web subnet
-4. Test connection: `Test-NetConnection -ComputerName <sql-ip> -Port 1433`
+**GCP:**
+```bash
+gcloud auth login
+gcloud config set project YOUR_PROJECT_ID
+```
 
-### MinIO Not Accessible
+### Terraform Errors
 
-1. Check MinIO service is running: `Get-Service MinIO`
-2. Verify NSG allows ports 9000/9001 from web subnet
-3. Check MinIO logs: `C:\AzureData\CustomDataSetupScript.log`
-
-### Custom Scripts Not Running
-
-1. Check logs: `C:\AzureData\CustomDataSetupScript.log`
-2. Verify VM has internet access
-3. Check Windows Event Viewer for errors
+- Check provider credentials are configured
+- Verify VM sizes are available in selected region
+- Ensure passwords meet requirements (min 12 characters)
+- Check quota limits in your cloud account
 
 ## Cleanup
 
@@ -213,50 +220,8 @@ terraform destroy
 
 **Warning**: This will delete all resources and data!
 
-## Customization
+## Related Documentation
 
-### Change VM Sizes
-
-Edit `terraform.tfvars`:
-
-```hcl
-web_vm_size   = "Standard_B2s"  # Smaller, cheaper option
-sql_vm_size   = "Standard_D2s_v3" # Smaller SQL server
-minio_vm_size = "Standard_B2s"   # Smaller MinIO server
-```
-
-### Change Disk Sizes
-
-```hcl
-sql_data_disk_size_gb   = 256  # Smaller data disk
-minio_data_disk_size_gb = 512  # Smaller storage
-```
-
-### Use Different Region
-
-```hcl
-location = "West Europe"  # or any Azure region
-```
-
-## Security Best Practices
-
-1. **Change Default Passwords**: Update all passwords after first login
-2. **Restrict RDP Access**: Update NSG rules to allow RDP only from your IP
-3. **Enable HTTPS**: Install SSL certificate on web server
-4. **Use Azure Key Vault**: Store secrets in Key Vault instead of variables
-5. **Regular Updates**: Keep Windows and SQL Server updated
-6. **Backup Strategy**: Configure automated backups for SQL Server
-
-## Additional Resources
-
-- [Azure Terraform Provider Documentation](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs)
-- [SendMyFiles Architecture](../INFRASTRUCTURE.md)
-- [Deployment Guide](../DEPLOYMENT.md)
-
-## Support
-
-For issues:
-1. Check Terraform logs: `terraform apply -debug`
-2. Check VM logs: `C:\AzureData\CustomDataSetupScript.log`
-3. Review Azure Portal for resource status
-
+- **[infra/ansible/README.md](../ansible/README.md)** - Ansible configuration and deployment
+- **[.github/workflows/README.md](../../.github/workflows/README.md)** - GitHub Actions deployment
+- **[INFRASTRUCTURE.md](../../INFRASTRUCTURE.md)** - Architecture documentation

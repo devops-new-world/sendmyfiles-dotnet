@@ -1,11 +1,21 @@
+variable "cloud_provider" {
+  description = "Cloud provider to use (azure, aws, gcp)"
+  type        = string
+  default     = "azure"
+  validation {
+    condition     = contains(["azure", "aws", "gcp"], var.cloud_provider)
+    error_message = "Cloud provider must be one of: azure, aws, gcp"
+  }
+}
+
 variable "resource_group_name" {
-  description = "Name of the resource group"
+  description = "Name of the resource group/resource group equivalent"
   type        = string
   default     = "sendmyfiles-rg"
 }
 
 variable "location" {
-  description = "Azure region for resources"
+  description = "Cloud region for resources (provider-specific)"
   type        = string
   default     = "East US"
 }
@@ -56,23 +66,23 @@ variable "minio_root_password" {
   default     = "minioadmin123!"
 }
 
-# VM Sizes
+# VM Sizes (provider-specific)
 variable "web_vm_size" {
-  description = "VM size for IIS/App server"
+  description = "VM size for IIS/App server (provider-specific)"
   type        = string
-  default     = "Standard_D2s_v3" # 2 vCPUs, 8 GB RAM
+  default     = "" # Will be set based on provider
 }
 
 variable "sql_vm_size" {
-  description = "VM size for SQL Server"
+  description = "VM size for SQL Server (provider-specific)"
   type        = string
-  default     = "Standard_D4s_v3" # 4 vCPUs, 16 GB RAM
+  default     = "" # Will be set based on provider
 }
 
 variable "minio_vm_size" {
-  description = "VM size for MinIO server"
+  description = "VM size for MinIO server (provider-specific)"
   type        = string
-  default     = "Standard_D2s_v3" # 2 vCPUs, 8 GB RAM
+  default     = "" # Will be set based on provider
 }
 
 # Storage
@@ -108,7 +118,7 @@ variable "minio_data_disk_size_gb" {
 
 # Network
 variable "vnet_address_space" {
-  description = "Address space for VNet"
+  description = "Address space for VNet/VPC"
   type        = list(string)
   default     = ["10.0.0.0/16"]
 }
@@ -149,3 +159,28 @@ variable "tags" {
   }
 }
 
+# AWS-specific variables
+variable "aws_key_pair_name" {
+  description = "AWS Key Pair name (for EC2 instances)"
+  type        = string
+  default     = ""
+}
+
+variable "aws_instance_profile" {
+  description = "AWS IAM instance profile name"
+  type        = string
+  default     = ""
+}
+
+# GCP-specific variables
+variable "gcp_project_id" {
+  description = "GCP Project ID"
+  type        = string
+  default     = ""
+}
+
+variable "gcp_zone" {
+  description = "GCP Zone (e.g., us-central1-a)"
+  type        = string
+  default     = ""
+}

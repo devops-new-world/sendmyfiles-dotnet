@@ -1,8 +1,10 @@
 # Copy this file to terraform.tfvars and update with your values
 # terraform.tfvars is ignored by git for security
 
+# Cloud Provider: azure, aws, or gcp
+cloud_provider      = "azure"
 resource_group_name = "sendmyfiles-rg"
-location            = "East US"
+location            = "East US"  # Azure: "East US", AWS: "us-east-1", GCP: "us-central1"
 environment         = "prod"
 
 # Administrator credentials for Windows VMs
@@ -34,6 +36,13 @@ vnet_address_space            = ["10.0.0.0/16"]
 web_subnet_address_prefix     = "10.0.1.0/24"
 sql_subnet_address_prefix      = "10.0.2.0/24"
 minio_subnet_address_prefix   = "10.0.3.0/24"
+
+# AWS-specific (only if cloud_provider = "aws")
+aws_key_pair_name = ""
+
+# GCP-specific (only if cloud_provider = "gcp")
+gcp_project_id = ""
+gcp_zone       = "us-central1-a"
 
 # Tags
 tags = {

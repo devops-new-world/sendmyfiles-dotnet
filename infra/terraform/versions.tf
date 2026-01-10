@@ -6,6 +6,14 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "~> 3.0"
     }
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+    google = {
+      source  = "hashicorp/google"
+      version = "~> 5.0"
+    }
     random = {
       source  = "hashicorp/random"
       version = "~> 3.0"
@@ -13,6 +21,7 @@ terraform {
   }
 }
 
+# Configure providers conditionally
 provider "azurerm" {
   features {
     resource_group {
@@ -24,3 +33,12 @@ provider "azurerm" {
   }
 }
 
+provider "aws" {
+  region = var.cloud_provider == "aws" ? var.location : "us-east-1"
+}
+
+provider "google" {
+  project = var.gcp_project_id != "" ? var.gcp_project_id : null
+  zone    = var.gcp_zone != "" ? var.gcp_zone : null
+  region  = var.cloud_provider == "gcp" ? var.location : "us-central1"
+}

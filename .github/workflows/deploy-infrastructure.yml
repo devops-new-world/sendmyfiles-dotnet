@@ -3,6 +3,15 @@ name: Deploy Infrastructure
 on:
   workflow_dispatch:
     inputs:
+      cloud_provider:
+        description: 'Cloud Provider'
+        required: false
+        default: 'azure'
+        type: choice
+        options:
+          - 'azure'
+          - 'aws'
+          - 'gcp'
       machine_count:
         description: 'Number of machines (1=All on one, 2=Web+SQL, 3=Web+SQL+MinIO)'
         required: false
@@ -13,40 +22,20 @@ on:
           - '2'
           - '3'
       web_vm_size:
-        description: 'Web Server VM Size (default: Standard_B2s, similar to AWS t3.medium)'
+        description: 'Web Server VM Size (provider-specific, leave empty for defaults)'
         required: false
-        default: 'Standard_B2s'
-        type: choice
-        options:
-          - 'Standard_B1s'
-          - 'Standard_B1ms'
-          - 'Standard_B2s'
-          - 'Standard_B2ms'
-          - 'Standard_D2s_v3'
-          - 'Standard_D4s_v3'
+        default: ''
+        type: string
       sql_vm_size:
-        description: 'SQL Server VM Size'
+        description: 'SQL Server VM Size (provider-specific, leave empty for defaults)'
         required: false
-        default: 'Standard_D2s_v3'
-        type: choice
-        options:
-          - 'Standard_B2s'
-          - 'Standard_B2ms'
-          - 'Standard_D2s_v3'
-          - 'Standard_D4s_v3'
-          - 'Standard_D8s_v3'
+        default: ''
+        type: string
       minio_vm_size:
-        description: 'MinIO Server VM Size (default: Standard_B2s, similar to AWS t3.medium)'
+        description: 'MinIO Server VM Size (provider-specific, leave empty for defaults)'
         required: false
-        default: 'Standard_B2s'
-        type: choice
-        options:
-          - 'Standard_B1s'
-          - 'Standard_B1ms'
-          - 'Standard_B2s'
-          - 'Standard_B2ms'
-          - 'Standard_D2s_v3'
-          - 'Standard_D4s_v3'
+        default: ''
+        type: string
       ssh_public_key:
         description: 'SSH Public Key (for future Linux support)'
         required: false
@@ -61,19 +50,39 @@ on:
           - 'staging'
           - 'prod'
       location:
-        description: 'Azure Region'
+        description: 'Cloud Region (e.g., East US, us-east-1, us-central1)'
         required: false
         default: 'East US'
         type: string
+      gcp_project_id:
+        description: 'GCP Project ID (required for GCP)'
+        required: false
+        type: string
+      gcp_zone:
+        description: 'GCP Zone (e.g., us-central1-a, required for GCP)'
+        required: false
+        type: string
+      aws_key_pair_name:
+        description: 'AWS Key Pair Name (optional for AWS)'
+        required: false
+        type: string
 
 env:
+  # Azure credentials (if using Azure)
   AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
   AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
   AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
   AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-  TF_VAR_admin_password: ${{ secrets.AZURE_ADMIN_PASSWORD }}
-  TF_VAR_sql_sa_password: ${{ secrets.AZURE_SQL_SA_PASSWORD }}
-  TF_VAR_minio_root_password: ${{ secrets.AZURE_MINIO_ROOT_PASSWORD }}
+  # AWS credentials (if using AWS)
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  AWS_DEFAULT_REGION: ${{ github.event.inputs.location || 'us-east-1' }}
+  # GCP credentials (if using GCP)
+  GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GCP_SA_KEY }}
+  # Common secrets
+  TF_VAR_admin_password: ${{ secrets.ADMIN_PASSWORD }}
+  TF_VAR_sql_sa_password: ${{ secrets.SQL_SA_PASSWORD }}
+  TF_VAR_minio_root_password: ${{ secrets.MINIO_ROOT_PASSWORD }}
 
 jobs:
   deploy:
@@ -91,6 +100,7 @@ jobs:
           terraform_version: 1.6.0
 
       - name: Azure Login
+        if: github.event.inputs.cloud_provider == 'azure' || github.event.inputs.cloud_provider == ''
         uses: azure/login@v2
         with:
           creds: |
@@ -101,19 +111,37 @@ jobs:
               "tenantId": "${{ secrets.AZURE_TENANT_ID }}"
             }
 
+      - name: Configure AWS credentials
+        if: github.event.inputs.cloud_provider == 'aws'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ github.event.inputs.location || 'us-east-1' }}
+
+      - name: Authenticate to Google Cloud
+        if: github.event.inputs.cloud_provider == 'gcp'
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
       - name: Create terraform.tfvars
         working-directory: infra/terraform
         run: |
           cat > terraform.tfvars <<EOF
+          cloud_provider = "${{ github.event.inputs.cloud_provider || 'azure' }}"
           resource_group_name = "sendmyfiles-rg"
           location = "${{ github.event.inputs.location || 'East US' }}"
           environment = "${{ github.event.inputs.environment || 'prod' }}"
           
-          web_vm_size = "${{ github.event.inputs.web_vm_size || 'Standard_B2s' }}"
-          sql_vm_size = "${{ github.event.inputs.sql_vm_size || 'Standard_D2s_v3' }}"
-          minio_vm_size = "${{ github.event.inputs.minio_vm_size || 'Standard_B2s' }}"
+          web_vm_size = "${{ github.event.inputs.web_vm_size || '' }}"
+          sql_vm_size = "${{ github.event.inputs.sql_vm_size || '' }}"
+          minio_vm_size = "${{ github.event.inputs.minio_vm_size || '' }}"
           
           ssh_public_key = "${{ github.event.inputs.ssh_public_key || '' }}"
+          aws_key_pair_name = "${{ github.event.inputs.aws_key_pair_name || '' }}"
+          gcp_project_id = "${{ github.event.inputs.gcp_project_id || '' }}"
+          gcp_zone = "${{ github.event.inputs.gcp_zone || '' }}"
           
           tags = {
             Project     = "SendMyFiles"
@@ -125,8 +153,10 @@ jobs:
             Repository  = "${{ github.repository }}"
             Branch      = "${{ github.ref_name }}"
             MachineCount = "${{ github.event.inputs.machine_count || '3' }}"
+            CloudProvider = "${{ github.event.inputs.cloud_provider || 'azure' }}"
           }
           EOF
+          echo "Deploying to: ${{ github.event.inputs.cloud_provider || 'azure' }}"
           echo "Note: Machine count (${{ github.event.inputs.machine_count || '3' }}) is recorded in tags. Current Terraform always creates 3 servers (Web, SQL, MinIO) for the standard architecture."
 
       - name: Terraform Init
