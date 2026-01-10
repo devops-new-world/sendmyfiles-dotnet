@@ -119,6 +119,24 @@ jobs:
         with:
           terraform_version: 1.6.0
 
+      - name: Set dummy credentials for unused providers
+        run: |
+          PROVIDER="${{ github.event.inputs.cloud_provider || 'azure' }}"
+          
+          # Set dummy Azure credentials if not using Azure (to avoid auth errors during plan)
+          if [ "$PROVIDER" != "azure" ]; then
+            echo "ARM_SUBSCRIPTION_ID=dummy" >> $GITHUB_ENV
+            echo "ARM_CLIENT_ID=dummy" >> $GITHUB_ENV
+            echo "ARM_CLIENT_SECRET=dummy" >> $GITHUB_ENV
+            echo "ARM_TENANT_ID=dummy" >> $GITHUB_ENV
+          fi
+          
+          # Set dummy GCP credentials if not using GCP (to avoid auth errors during plan)
+          if [ "$PROVIDER" != "gcp" ]; then
+            echo '{"type":"service_account","project_id":"dummy"}' > /tmp/gcp-key.json
+            echo "GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-key.json" >> $GITHUB_ENV
+          fi
+
       - name: Azure Login
         if: github.event.inputs.cloud_provider == 'azure' || github.event.inputs.cloud_provider == ''
         uses: azure/login@v2
@@ -130,6 +148,11 @@ jobs:
               "subscriptionId": "${{ github.event.inputs.azure_subscription_id }}",
               "tenantId": "${{ github.event.inputs.azure_tenant_id }}"
             }
+        env:
+          ARM_SUBSCRIPTION_ID: ${{ github.event.inputs.azure_subscription_id }}
+          ARM_CLIENT_ID: ${{ github.event.inputs.azure_client_id }}
+          ARM_CLIENT_SECRET: ${{ github.event.inputs.azure_client_secret }}
+          ARM_TENANT_ID: ${{ github.event.inputs.azure_tenant_id }}
 
       - name: Set AWS region and convert format
         if: github.event.inputs.cloud_provider == 'aws'
@@ -179,6 +202,8 @@ jobs:
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ github.event.inputs.gcp_service_account_key }}
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
 
       - name: Set provider-specific location
         id: set_location
